@@ -27,7 +27,8 @@ const InvestmentClubDAO = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [clubs, setClubs] = useState([
+  // Default data
+  const defaultClubs = [
     {
       id: 1,
       name: "DeFi Innovators",
@@ -48,9 +49,9 @@ const InvestmentClubDAO = () => {
       created: "2024-02-03",
       inviteCode: "BLUE-INV-2024"
     }
-  ]);
+  ];
 
-  const [proposals, setProposals] = useState([
+  const defaultProposals = [
     {
       id: 1,
       clubId: 1,
@@ -75,9 +76,9 @@ const InvestmentClubDAO = () => {
       created: "2024-02-15",
       votes: []
     }
-  ]);
+  ];
 
-  const [members, setMembers] = useState([
+  const defaultMembers = [
     {
       id: 1,
       clubId: 1,
@@ -128,7 +129,52 @@ const InvestmentClubDAO = () => {
       status: "active",
       addedBy: "0x951f29Bb...efgh"
     }
-  ]);
+  ];
+
+  // Load data from localStorage or use defaults
+  const [clubs, setClubs] = useState(() => {
+    const saved = window.localStorage?.getItem('investdao-clubs');
+    return saved ? JSON.parse(saved) : defaultClubs;
+  });
+
+  const [proposals, setProposals] = useState(() => {
+    const saved = window.localStorage?.getItem('investdao-proposals');
+    return saved ? JSON.parse(saved) : defaultProposals;
+  });
+
+  const [members, setMembers] = useState(() => {
+    const saved = window.localStorage?.getItem('investdao-members');
+    return saved ? JSON.parse(saved) : defaultMembers;
+  });
+
+  // Save data to localStorage whenever state changes
+  useEffect(() => {
+    window.localStorage?.setItem('investdao-clubs', JSON.stringify(clubs));
+  }, [clubs]);
+
+  useEffect(() => {
+    window.localStorage?.setItem('investdao-proposals', JSON.stringify(proposals));
+  }, [proposals]);
+
+  useEffect(() => {
+    window.localStorage?.setItem('investdao-members', JSON.stringify(members));
+  }, [members]);
+
+  // Load and save user account
+  useEffect(() => {
+    const savedAccount = window.localStorage?.getItem('investdao-account');
+    if (savedAccount) {
+      setUserAccount(savedAccount);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (userAccount) {
+      window.localStorage?.setItem('investdao-account', userAccount);
+    } else {
+      window.localStorage?.removeItem('investdao-account');
+    }
+  }, [userAccount]);
 
   // Calculate club treasury from member contributions
   const calculateClubTreasury = (clubId) => {
@@ -175,6 +221,27 @@ const InvestmentClubDAO = () => {
   const connectTestWallet = () => {
     setUserAccount("0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca");
     setError('');
+  };
+
+  const disconnectWallet = () => {
+    setUserAccount(null);
+    setSelectedClub(null);
+    setError('');
+  };
+
+  const resetData = () => {
+    if (window.confirm('This will reset all data to defaults. Are you sure?')) {
+      window.localStorage?.removeItem('investdao-clubs');
+      window.localStorage?.removeItem('investdao-proposals');
+      window.localStorage?.removeItem('investdao-members');
+      window.localStorage?.removeItem('investdao-account');
+      setClubs(defaultClubs);
+      setProposals(defaultProposals);
+      setMembers(defaultMembers);
+      setUserAccount(null);
+      setSelectedClub(null);
+      setError('');
+    }
   };
 
   const copyToClipboard = (text) => {
@@ -252,7 +319,7 @@ const InvestmentClubDAO = () => {
     const handleSubmit = () => {
       if (formData.name && formData.description && userAccount) {
         const newClub = {
-          id: clubs.length + 1,
+          id: Math.max(...clubs.map(c => c.id), 0) + 1,
           name: formData.name,
           description: formData.description,
           members: 1,
@@ -264,7 +331,7 @@ const InvestmentClubDAO = () => {
         setClubs([...clubs, newClub]);
         
         const newMember = {
-          id: members.length + 1,
+          id: Math.max(...members.map(m => m.id), 0) + 1,
           clubId: newClub.id,
           address: userAccount,
           contribution: 0,
@@ -346,7 +413,7 @@ const InvestmentClubDAO = () => {
       }
 
       const newMember = {
-        id: members.length + 1,
+        id: Math.max(...members.map(m => m.id), 0) + 1,
         clubId: selectedClub.id,
         address: memberAddress,
         contribution: 0,
@@ -493,7 +560,7 @@ const InvestmentClubDAO = () => {
     const handleSubmit = () => {
       if (formData.title && formData.description && formData.amount && formData.target && selectedClub) {
         const newProposal = {
-          id: proposals.length + 1,
+          id: Math.max(...proposals.map(p => p.id), 0) + 1,
           clubId: selectedClub.id,
           title: formData.title,
           description: formData.description,
@@ -950,10 +1017,18 @@ const InvestmentClubDAO = () => {
               >
                 Dashboard
               </button>
+              {userAccount && (
+                <button
+                  onClick={resetData}
+                  className="text-gray-500 hover:text-gray-700 text-sm font-medium"
+                >
+                  Reset Data
+                </button>
+              )}
             </nav>
 
             <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-500">Polygon Testnet</div>
+              <div className="text-sm text-gray-500">Polygon Testnet • Data Persisted</div>
               {!userAccount ? (
                 <button
                   onClick={connectTestWallet}
@@ -963,10 +1038,19 @@ const InvestmentClubDAO = () => {
                   Connect Test Wallet
                 </button>
               ) : (
-                <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-lg">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="text-sm font-medium">{userAccount.slice(0, 6)}...{userAccount.slice(-4)}</span>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Test Mode</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-lg">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm font-medium">{userAccount.slice(0, 6)}...{userAccount.slice(-4)}</span>
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Leader</span>
+                  </div>
+                  <button
+                    onClick={disconnectWallet}
+                    className="text-gray-500 hover:text-gray-700 p-2"
+                    title="Disconnect"
+                  >
+                    ✕
+                  </button>
                 </div>
               )}
             </div>
@@ -996,6 +1080,8 @@ const InvestmentClubDAO = () => {
               <span>Built on Polygon</span>
               <span>•</span>
               <span>Leader-Controlled Membership</span>
+              <span>•</span>
+              <span>LocalStorage Persistence</span>
             </div>
           </div>
         </div>
