@@ -11,179 +11,40 @@ import {
   XCircle,
   Crown,
   User,
-  Coins,
   UserPlus,
-  Mail,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Shield
 } from 'lucide-react';
 
-// Contract ABIs - simplified for Web3.js
-const DAO_ABI = [
-  {
-    "inputs": [{"name": "_amount", "type": "uint256"}],
-    "name": "deposit",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"name": "_description", "type": "string"},
-      {"name": "_amount", "type": "uint256"},
-      {"name": "_target", "type": "address"}
-    ],
-    "name": "createProposal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"name": "_proposalId", "type": "uint256"},
-      {"name": "_support", "type": "bool"}
-    ],
-    "name": "vote",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"name": "_proposalId", "type": "uint256"}],
-    "name": "executeProposal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getMembers",
-    "outputs": [{"name": "", "type": "address[]"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"name": "_id", "type": "uint256"}],
-    "name": "getProposal",
-    "outputs": [
-      {"name": "id", "type": "uint256"},
-      {"name": "description", "type": "string"},
-      {"name": "amount", "type": "uint256"},
-      {"name": "target", "type": "address"},
-      {"name": "yesVotes", "type": "uint256"},
-      {"name": "noVotes", "type": "uint256"},
-      {"name": "executed", "type": "bool"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"name": "_proposalId", "type": "uint256"},
-      {"name": "_member", "type": "address"}
-    ],
-    "name": "hasVoted",
-    "outputs": [{"name": "", "type": "bool"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"name": "", "type": "address"}],
-    "name": "deposits",
-    "outputs": [{"name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "proposalCount",
-    "outputs": [{"name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
-
-const USDC_ABI = [
-  {
-    "inputs": [{"name": "account", "type": "address"}],
-    "name": "balanceOf",
-    "outputs": [{"name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"name": "to", "type": "address"},
-      {"name": "amount", "type": "uint256"}
-    ],
-    "name": "transfer",
-    "outputs": [{"name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"name": "spender", "type": "address"},
-      {"name": "amount", "type": "uint256"}
-    ],
-    "name": "approve",
-    "outputs": [{"name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
 const InvestmentClubDAO = () => {
-  // Web3 and contract states
-  const [web3, setWeb3] = useState(null);
   const [userAccount, setUserAccount] = useState(null);
-  const [daoContract, setDaoContract] = useState(null);
-  const [usdcContract, setUsdcContract] = useState(null);
-  const [networkId, setNetworkId] = useState(null);
-
-  // Contract addresses (update these with your deployed addresses)
-  const CONTRACT_ADDRESSES = {
-    80001: { // Mumbai testnet
-      DAO: "0x...", // Your deployed DAO contract address
-      USDC: "0x..." // Your deployed MockUSDC address
-    },
-    137: { // Polygon mainnet
-      DAO: "0x...",
-      USDC: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" // Real USDC on Polygon
-    }
-  };
-
-  // App states (keeping all original functionality)
   const [selectedClub, setSelectedClub] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Data states (original structure + smart contract data)
   const [clubs, setClubs] = useState([
     {
       id: 1,
       name: "DeFi Innovators",
       description: "Focused on emerging DeFi protocols and yield farming opportunities",
-      treasury: 125000,
       members: 3,
       proposals: 3,
-      contractAddress: "0x742d35Cc6C1F5b2E123C7E9C27...abcd",
       creator: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca",
       created: "2024-01-15",
       inviteCode: "DEFI-INV-2024"
     },
     {
       id: 2,
-      name: "Blue Chip Holdings",
+      name: "Blue Chip Holdings", 
       description: "Conservative investments in established cryptocurrencies",
-      treasury: 89500,
       members: 2,
       proposals: 1,
-      contractAddress: "0x951f29Bb7F3C2D891B5F8A27...efgh",
-      creator: "0x951f29Bb...efgh", 
+      creator: "0x951f29Bb...efgh",
       created: "2024-02-03",
       inviteCode: "BLUE-INV-2024"
     }
@@ -194,16 +55,13 @@ const InvestmentClubDAO = () => {
       id: 1,
       clubId: 1,
       title: "Invest 30% in Arbitrum Ecosystem",
-      description: "Allocate 30% of treasury to ARB tokens and Arbitrum-based DeFi protocols for potential L2 growth",
+      description: "Allocate 30% of treasury to ARB tokens and Arbitrum-based DeFi protocols",
       amount: 37500,
       proposer: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca",
       status: "active",
-      votesYes: 8200,
-      votesNo: 3100,
-      totalVotes: 11300,
       deadline: "2024-03-15",
       created: "2024-03-01",
-      hasUserVoted: false
+      votes: []
     },
     {
       id: 2,
@@ -213,12 +71,9 @@ const InvestmentClubDAO = () => {
       amount: 12500,
       proposer: "0x951f29Bb...efgh",
       status: "passed",
-      votesYes: 9800,
-      votesNo: 2100,
-      totalVotes: 11900,
       deadline: "2024-02-28",
       created: "2024-02-15",
-      hasUserVoted: false
+      votes: []
     }
   ]);
 
@@ -228,20 +83,20 @@ const InvestmentClubDAO = () => {
       clubId: 1,
       address: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca",
       contribution: 25000,
-      role: "Founder",
-      votingPower: "22.1%",
+      role: "Leader",
       joinDate: "2024-01-15",
-      status: "active"
+      status: "active",
+      addedBy: null
     },
     {
       id: 2,
       clubId: 1,
-      address: "0x951f29Bb7F3C2D891B5F8A27...efgh", 
+      address: "0x951f29Bb7F3C2D891B5F8A27...efgh",
       contribution: 18500,
-      role: "Treasurer",
-      votingPower: "16.4%",
+      role: "Member", 
       joinDate: "2024-01-20",
-      status: "active"
+      status: "active",
+      addedBy: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca"
     },
     {
       id: 3,
@@ -249,19 +104,19 @@ const InvestmentClubDAO = () => {
       address: "0x123abc45...ijkl",
       contribution: 15000,
       role: "Member",
-      votingPower: "13.3%",
-      joinDate: "2024-01-25",
-      status: "active"
+      joinDate: "2024-01-25", 
+      status: "active",
+      addedBy: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca"
     },
     {
       id: 4,
       clubId: 2,
       address: "0x951f29Bb...efgh",
       contribution: 30000,
-      role: "Founder",
-      votingPower: "33.5%",
+      role: "Leader",
       joinDate: "2024-02-03",
-      status: "active"
+      status: "active",
+      addedBy: null
     },
     {
       id: 5,
@@ -269,296 +124,124 @@ const InvestmentClubDAO = () => {
       address: "0xabc123...xyz",
       contribution: 15000,
       role: "Member",
-      votingPower: "16.8%",
       joinDate: "2024-02-10",
-      status: "active"
+      status: "active",
+      addedBy: "0x951f29Bb...efgh"
     }
   ]);
 
-  // Smart contract specific states
-  const [treasury, setTreasury] = useState(0);
-  const [userBalance, setUserBalance] = useState(0);
-  const [userDeposit, setUserDeposit] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Calculate club treasury from member contributions
+  const calculateClubTreasury = (clubId) => {
+    return members
+      .filter(m => m.clubId === clubId)
+      .reduce((sum, member) => sum + member.contribution, 0);
+  };
 
-  // Initialize Web3 and contracts
-  useEffect(() => {
-    initializeWeb3();
-  }, []);
+  // Calculate voting power based on contribution
+  const calculateVotingPower = (memberContribution, clubId) => {
+    const totalContributions = calculateClubTreasury(clubId);
+    if (totalContributions === 0) return 0;
+    return (memberContribution / totalContributions) * 100;
+  };
 
-  // Set document title
+  // Calculate proposal votes
+  const calculateProposalVotes = (proposalId) => {
+    const proposal = proposals.find(p => p.id === proposalId);
+    if (!proposal || !proposal.votes) {
+      return { votesYes: 0, votesNo: 0, totalVotes: 0 };
+    }
+
+    const votesYes = proposal.votes
+      .filter(vote => vote.support)
+      .reduce((sum, vote) => sum + vote.weight, 0);
+    
+    const votesNo = proposal.votes
+      .filter(vote => !vote.support)
+      .reduce((sum, vote) => sum + vote.weight, 0);
+
+    return { votesYes, votesNo, totalVotes: votesYes + votesNo };
+  };
+
+  // Check if current user is leader
+  const isLeader = (clubId) => {
+    const club = clubs.find(c => c.id === clubId);
+    return club && club.creator === userAccount;
+  };
+
   useEffect(() => {
     document.title = 'InvestDAO';
   }, []);
 
-  const initializeWeb3 = async () => {
-    if (typeof window.ethereum !== 'undefined') {
-      try {
-        const Web3 = (await import('https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js')).default;
-        const web3Instance = new Web3(window.ethereum);
-        setWeb3(web3Instance);
-        
-        // Get network
-        const chainId = await web3Instance.eth.getChainId();
-        setNetworkId(chainId);
-        
-        // Check if already connected
-        const accounts = await web3Instance.eth.getAccounts();
-        if (accounts.length > 0) {
-          setUserAccount(accounts[0]);
-          await initializeContracts(web3Instance, accounts[0], chainId);
-        }
-      } catch (error) {
-        console.error('Error initializing Web3:', error);
-        setError('Failed to initialize Web3');
-      }
-    } else {
-      setError('Please install MetaMask to use this app');
-    }
-  };
-
-  const initializeContracts = async (web3Instance, account, chainId) => {
-    try {
-      const addresses = CONTRACT_ADDRESSES[chainId];
-      if (!addresses) {
-        setError(`Unsupported network. Please switch to Polygon or Mumbai testnet.`);
-        return;
-      }
-
-      const dao = new web3Instance.eth.Contract(DAO_ABI, addresses.DAO);
-      const usdc = new web3Instance.eth.Contract(USDC_ABI, addresses.USDC);
-      
-      setDaoContract(dao);
-      setUsdcContract(usdc);
-      
-      await loadContractData(dao, usdc, account, web3Instance);
-    } catch (error) {
-      console.error('Error initializing contracts:', error);
-      setError('Failed to initialize contracts');
-    }
-  };
-
-  const loadContractData = async (dao, usdc, account, web3Instance) => {
-    try {
-      setLoading(true);
-      
-      // Load members from contract if available
-      if (dao && dao.options.address !== '0x...') {
-        const memberAddresses = await dao.methods.getMembers().call();
-        const memberData = await Promise.all(
-          memberAddresses.map(async (address, index) => {
-            const deposit = await dao.methods.deposits(address).call();
-            return {
-              id: index + 1,
-              clubId: 1, // For single DAO implementation
-              address,
-              contribution: parseFloat(web3Instance.utils.fromWei(deposit, 'mwei')),
-              role: index === 0 ? 'Founder' : 'Member',
-              joinDate: new Date().toISOString().split('T')[0],
-              status: 'active',
-              votingPower: '0%' // Calculate based on contribution
-            };
-          })
-        );
-        if (memberData.length > 0) {
-          setMembers(memberData);
-        }
-      }
-      
-      // Load treasury balance
-      if (usdc && dao && dao.options.address !== '0x...') {
-        const treasuryBalance = await usdc.methods.balanceOf(dao.options.address).call();
-        setTreasury(parseFloat(web3Instance.utils.fromWei(treasuryBalance, 'mwei')));
-        
-        // Update clubs with real treasury data
-        setClubs(prevClubs => prevClubs.map(club => 
-          club.id === 1 
-            ? {...club, treasury: parseFloat(web3Instance.utils.fromWei(treasuryBalance, 'mwei'))}
-            : club
-        ));
-      }
-      
-      if (account && usdc) {
-        // Load user balance
-        const balance = await usdc.methods.balanceOf(account).call();
-        setUserBalance(parseFloat(web3Instance.utils.fromWei(balance, 'mwei')));
-        
-        // Load user deposit
-        if (dao && dao.options.address !== '0x...') {
-          const deposit = await dao.methods.deposits(account).call();
-          setUserDeposit(parseFloat(web3Instance.utils.fromWei(deposit, 'mwei')));
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error loading contract data:', error);
-      setError('Failed to load contract data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const connectWallet = async () => {
-    if (!web3) {
-      setError('Web3 not initialized');
-      return;
-    }
-
-    try {
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const accounts = await web3.eth.getAccounts();
-      const account = accounts[0];
-      setUserAccount(account);
-      
-      const chainId = await web3.eth.getChainId();
-      await initializeContracts(web3, account, chainId);
-      setError('');
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-      setError('Failed to connect wallet');
-    }
-  };
-
-  // Function to connect with specific address for testing
   const connectTestWallet = () => {
-    const testAccount = "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca";
-    setUserAccount(testAccount);
-    setNetworkId(80001); // Mumbai testnet
+    setUserAccount("0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca");
     setError('');
-    // Note: Contract interactions won't work without proper wallet connection
-    // This is just for UI testing
   };
 
-  const handleDeposit = async (amount) => {
-    if (!daoContract || !usdcContract || !userAccount || !web3) {
-      setError('Contracts not initialized');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const amountWei = web3.utils.toWei(amount.toString(), 'mwei');
-      
-      // First approve the DAO to spend USDC
-      await usdcContract.methods.approve(daoContract.options.address, amountWei)
-        .send({ from: userAccount });
-      
-      // Then deposit
-      await daoContract.methods.deposit(amountWei)
-        .send({ from: userAccount });
-      
-      // Reload data
-      await loadContractData(daoContract, usdcContract, userAccount, web3);
-      setError('');
-    } catch (error) {
-      console.error('Error depositing:', error);
-      setError('Failed to deposit funds');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateProposal = async (title, description, amount, target) => {
-    if (!daoContract || !userAccount || !web3) {
-      setError('Contract not initialized');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const amountWei = web3.utils.toWei(amount.toString(), 'mwei');
-      
-      await daoContract.methods.createProposal(title, amountWei, target)
-        .send({ from: userAccount });
-      
-      // Reload data
-      await loadContractData(daoContract, usdcContract, userAccount, web3);
-      setError('');
-    } catch (error) {
-      console.error('Error creating proposal:', error);
-      setError('Failed to create proposal');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVote = async (proposalId, support) => {
-    if (!daoContract || !userAccount || !web3) {
-      setError('Contract not initialized');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await daoContract.methods.vote(proposalId, support)
-        .send({ from: userAccount });
-      
-      // Reload data
-      await loadContractData(daoContract, usdcContract, userAccount, web3);
-      setError('');
-    } catch (error) {
-      console.error('Error voting:', error);
-      setError('Failed to vote');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleExecuteProposal = async (proposalId) => {
-    if (!daoContract || !userAccount || !web3) {
-      setError('Contract not initialized');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await daoContract.methods.executeProposal(proposalId)
-        .send({ from: userAccount });
-      
-      // Reload data
-      await loadContractData(daoContract, usdcContract, userAccount, web3);
-      setError('');
-    } catch (error) {
-      console.error('Error executing proposal:', error);
-      setError('Failed to execute proposal');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Original utility functions
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
   };
 
   const vote = (proposalId, voteType) => {
-    const voteWeight = 1000;
-    setProposals(proposals.map(proposal => 
-      proposal.id === proposalId
-        ? {
-            ...proposal,
-            votesYes: voteType === 'yes' ? proposal.votesYes + voteWeight : proposal.votesYes,
-            votesNo: voteType === 'no' ? proposal.votesNo + voteWeight : proposal.votesNo,
-            totalVotes: proposal.totalVotes + voteWeight,
-            hasUserVoted: true
-          }
-        : proposal
-    ));
+    if (!selectedClub || !userAccount) return;
+
+    const userMember = members.find(m => 
+      m.clubId === selectedClub.id && m.address === userAccount
+    );
+    
+    if (!userMember || userMember.contribution === 0) {
+      setError('You must have a contribution to vote');
+      return;
+    }
+
+    const voteWeight = userMember.contribution;
+
+    setProposals(prevProposals => prevProposals.map(proposal => {
+      if (proposal.id === proposalId) {
+        const existingVoteIndex = proposal.votes?.findIndex(v => v.address === userAccount);
+        let updatedVotes = proposal.votes || [];
+        
+        if (existingVoteIndex >= 0) {
+          updatedVotes[existingVoteIndex] = {
+            address: userAccount,
+            support: voteType === 'yes',
+            weight: voteWeight
+          };
+        } else {
+          updatedVotes.push({
+            address: userAccount,
+            support: voteType === 'yes',
+            weight: voteWeight
+          });
+        }
+
+        return { ...proposal, votes: updatedVotes };
+      }
+      return proposal;
+    }));
   };
 
-  const removeMember = (memberId) => {
-    if (window.confirm('Are you sure you want to remove this member?')) {
-      setMembers(members.filter(member => member.id !== memberId));
-      
+  const removeMember = (memberId, clubId) => {
+    if (!isLeader(clubId)) {
+      setError('Only the club leader can remove members');
+      return;
+    }
+
+    const memberToRemove = members.find(m => m.id === memberId);
+    if (!memberToRemove || memberToRemove.role === 'Leader') {
+      setError('Cannot remove the club leader');
+      return;
+    }
+
+    if (window.confirm(`Remove member ${memberToRemove.address}?`)) {
+      setMembers(prevMembers => prevMembers.filter(member => member.id !== memberId));
       const updatedClubs = clubs.map(club => 
-        club.id === selectedClub.id 
-          ? {...club, members: club.members - 1}
-          : club
+        club.id === clubId ? {...club, members: club.members - 1} : club
       );
       setClubs(updatedClubs);
-      setSelectedClub({...selectedClub, members: selectedClub.members - 1});
+      if (selectedClub?.id === clubId) {
+        setSelectedClub({...selectedClub, members: selectedClub.members - 1});
+      }
     }
   };
 
@@ -567,15 +250,13 @@ const InvestmentClubDAO = () => {
     const [formData, setFormData] = useState({ name: '', description: '' });
     
     const handleSubmit = () => {
-      if (formData.name && formData.description) {
+      if (formData.name && formData.description && userAccount) {
         const newClub = {
           id: clubs.length + 1,
           name: formData.name,
           description: formData.description,
-          treasury: 0,
           members: 1,
           proposals: 0,
-          contractAddress: `0x${Math.random().toString(16).substr(2, 40)}`,
           creator: userAccount,
           created: new Date().toISOString().split('T')[0],
           inviteCode: `${formData.name.toUpperCase().slice(0, 4)}-INV-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
@@ -587,10 +268,10 @@ const InvestmentClubDAO = () => {
           clubId: newClub.id,
           address: userAccount,
           contribution: 0,
-          role: "Founder",
-          votingPower: "100%",
+          role: "Leader",
           joinDate: new Date().toISOString().split('T')[0],
-          status: "active"
+          status: "active",
+          addedBy: null
         };
         setMembers([...members, newMember]);
         
@@ -643,45 +324,82 @@ const InvestmentClubDAO = () => {
 
   const AddMemberModal = () => {
     const [memberAddress, setMemberAddress] = useState('');
-    const [initialRole, setInitialRole] = useState('Member');
     
     const handleAddMember = () => {
-      if (memberAddress && selectedClub) {
-        const newMember = {
-          id: members.length + 1,
-          clubId: selectedClub.id,
-          address: memberAddress,
-          contribution: 0,
-          role: initialRole,
-          votingPower: "0%",
-          joinDate: new Date().toISOString().split('T')[0],
-          status: "active"
-        };
-        
-        setMembers([...members, newMember]);
-        
-        const updatedClubs = clubs.map(club => 
-          club.id === selectedClub.id 
-            ? {...club, members: club.members + 1}
-            : club
-        );
-        setClubs(updatedClubs);
-        setSelectedClub({...selectedClub, members: selectedClub.members + 1});
-        
-        setShowAddMemberModal(false);
-        setMemberAddress('');
-        setInitialRole('Member');
+      if (!selectedClub || !userAccount || !isLeader(selectedClub.id)) {
+        setError('Only the club leader can add members');
+        return;
       }
+
+      if (!memberAddress || !memberAddress.startsWith('0x')) {
+        setError('Please enter a valid wallet address');
+        return;
+      }
+
+      const existingMember = members.find(m => 
+        m.clubId === selectedClub.id && m.address.toLowerCase() === memberAddress.toLowerCase()
+      );
+      
+      if (existingMember) {
+        setError('This address is already a member');
+        return;
+      }
+
+      const newMember = {
+        id: members.length + 1,
+        clubId: selectedClub.id,
+        address: memberAddress,
+        contribution: 0,
+        role: "Member",
+        joinDate: new Date().toISOString().split('T')[0],
+        status: "active",
+        addedBy: userAccount
+      };
+      
+      setMembers([...members, newMember]);
+      const updatedClubs = clubs.map(club => 
+        club.id === selectedClub.id ? {...club, members: club.members + 1} : club
+      );
+      setClubs(updatedClubs);
+      setSelectedClub({...selectedClub, members: selectedClub.members + 1});
+      
+      setShowAddMemberModal(false);
+      setMemberAddress('');
+      setError('');
     };
+
+    if (selectedClub && !isLeader(selectedClub.id)) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <Shield className="w-8 h-8 text-red-500" />
+              <h2 className="text-2xl font-bold text-red-600">Access Denied</h2>
+            </div>
+            <p className="text-gray-600 mb-6">Only the club leader can add new members.</p>
+            <button
+              onClick={() => setShowAddMemberModal(false)}
+              className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl p-6 w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-4">Add New Member</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <Crown className="w-6 h-6 text-yellow-500" />
+            <h2 className="text-2xl font-bold">Add New Member</h2>
+          </div>
           <div className="mb-4 p-4 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-800">
               Adding to: <strong>{selectedClub?.name}</strong>
             </p>
+            <p className="text-xs text-blue-600 mt-1">As club leader, only you can add members</p>
           </div>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2">Wallet Address</label>
@@ -692,18 +410,6 @@ const InvestmentClubDAO = () => {
               className="w-full p-3 border rounded-lg font-mono text-sm"
               placeholder="0x..."
             />
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Initial Role</label>
-            <select
-              value={initialRole}
-              onChange={(e) => setInitialRole(e.target.value)}
-              className="w-full p-3 border rounded-lg"
-            >
-              <option value="Member">Member</option>
-              <option value="Treasurer">Treasurer</option>
-              <option value="Admin">Admin</option>
-            </select>
           </div>
           <div className="flex gap-3">
             <button
@@ -724,126 +430,17 @@ const InvestmentClubDAO = () => {
     );
   };
 
-  const InviteMemberModal = () => {
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [generatedLink, setGeneratedLink] = useState('');
-    
-    const handleGenerateInvite = () => {
-      if (selectedClub) {
-        const inviteLink = `https://investdao.app/join/${selectedClub.inviteCode}`;
-        setGeneratedLink(inviteLink);
-      }
-    };
-
-    const handleSendInvite = () => {
-      alert(`Invite sent to ${inviteEmail}!`);
-      setShowInviteModal(false);
-      setInviteEmail('');
-      setGeneratedLink('');
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-4">Invite Member</h2>
-          <div className="mb-4 p-4 bg-purple-50 rounded-lg">
-            <p className="text-sm text-purple-800">
-              Inviting to: <strong>{selectedClub?.name}</strong>
-            </p>
-          </div>
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Email Address</label>
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              className="w-full p-3 border rounded-lg"
-              placeholder="Enter email address"
-            />
-          </div>
-          
-          {!generatedLink ? (
-            <div className="mb-4">
-              <button
-                onClick={handleGenerateInvite}
-                className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-              >
-                Generate Invite Link
-              </button>
-            </div>
-          ) : (
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Invite Link</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={generatedLink}
-                  readOnly
-                  className="flex-1 p-3 border rounded-lg bg-gray-50 text-sm font-mono"
-                />
-                <button
-                  onClick={() => copyToClipboard(generatedLink)}
-                  className="p-3 border rounded-lg hover:bg-gray-50"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-          
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowInviteModal(false);
-                setInviteEmail('');
-                setGeneratedLink('');
-              }}
-              className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            {generatedLink && (
-              <button
-                onClick={handleSendInvite}
-                className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Send Invite
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const DepositModal = () => {
     const [amount, setAmount] = useState('');
     
-    const handleSubmit = async () => {
-      if (amount && parseFloat(amount) > 0) {
-        // Try smart contract deposit first, fallback to mock update
-        if (daoContract && usdcContract && userAccount && web3) {
-          await handleDeposit(parseFloat(amount));
-        } else {
-          // Mock functionality for testing
-          if (selectedClub) {
-            const updatedClubs = clubs.map(club => 
-              club.id === selectedClub.id 
-                ? {...club, treasury: club.treasury + parseFloat(amount)}
-                : club
-            );
-            setClubs(updatedClubs);
-            setSelectedClub({...selectedClub, treasury: selectedClub.treasury + parseFloat(amount)});
-            
-            const updatedMembers = members.map(member => 
-              member.clubId === selectedClub.id && member.address === userAccount
-                ? {...member, contribution: member.contribution + parseFloat(amount)}
-                : member
-            );
-            setMembers(updatedMembers);
-          }
-        }
-        
+    const handleSubmit = () => {
+      if (amount && parseFloat(amount) > 0 && selectedClub && userAccount) {
+        const updatedMembers = members.map(member => 
+          member.clubId === selectedClub.id && member.address === userAccount
+            ? {...member, contribution: member.contribution + parseFloat(amount)}
+            : member
+        );
+        setMembers(updatedMembers);
         setShowDepositModal(false);
         setAmount('');
       }
@@ -857,11 +454,6 @@ const InvestmentClubDAO = () => {
             <p className="text-sm text-blue-800">
               Depositing to: <strong>{selectedClub?.name}</strong>
             </p>
-            {userBalance > 0 && (
-              <p className="text-sm text-blue-800">
-                Your USDC Balance: <strong>{userBalance.toFixed(2)} USDC</strong>
-              </p>
-            )}
           </div>
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">Amount (USDC)</label>
@@ -879,16 +471,15 @@ const InvestmentClubDAO = () => {
             <button
               onClick={() => setShowDepositModal(false)}
               className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
-              disabled={loading}
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              disabled={loading || !amount || parseFloat(amount) <= 0}
+              className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              disabled={!amount || parseFloat(amount) <= 0}
             >
-              {loading ? 'Processing...' : 'Deposit'}
+              Deposit
             </button>
           </div>
         </div>
@@ -899,32 +490,22 @@ const InvestmentClubDAO = () => {
   const ProposalModal = () => {
     const [formData, setFormData] = useState({ title: '', description: '', amount: '', target: '' });
     
-    const handleSubmit = async () => {
-      if (formData.title && formData.description && formData.amount && formData.target) {
-        // Try smart contract proposal creation first, fallback to mock
-        if (daoContract && userAccount && web3) {
-          await handleCreateProposal(formData.title, formData.description, parseFloat(formData.amount), formData.target);
-        } else {
-          // Mock functionality for testing
-          const newProposal = {
-            id: proposals.length + 1,
-            clubId: selectedClub.id,
-            title: formData.title,
-            description: formData.description,
-            amount: parseFloat(formData.amount),
-            proposer: userAccount,
-            status: "active",
-            votesYes: 0,
-            votesNo: 0,
-            totalVotes: 0,
-            deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            created: new Date().toISOString().split('T')[0],
-            hasUserVoted: false,
-            target: formData.target
-          };
-          setProposals([...proposals, newProposal]);
-        }
-        
+    const handleSubmit = () => {
+      if (formData.title && formData.description && formData.amount && formData.target && selectedClub) {
+        const newProposal = {
+          id: proposals.length + 1,
+          clubId: selectedClub.id,
+          title: formData.title,
+          description: formData.description,
+          amount: parseFloat(formData.amount),
+          proposer: userAccount,
+          status: "active",
+          deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          created: new Date().toISOString().split('T')[0],
+          votes: [],
+          target: formData.target
+        };
+        setProposals([...proposals, newProposal]);
         setShowProposalModal(false);
         setFormData({ title: '', description: '', amount: '', target: '' });
       }
@@ -950,11 +531,11 @@ const InvestmentClubDAO = () => {
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               className="w-full p-3 border rounded-lg h-20 resize-none"
-              placeholder="Describe the investment proposal"
+              placeholder="Describe the proposal"
             />
           </div>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Investment Amount (USDC)</label>
+            <label className="block text-sm font-medium mb-2">Amount (USDC)</label>
             <input
               type="number"
               value={formData.amount}
@@ -979,16 +560,15 @@ const InvestmentClubDAO = () => {
             <button
               onClick={() => setShowProposalModal(false)}
               className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
-              disabled={loading}
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              className="flex-1 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              disabled={loading || !formData.title || !formData.description || !formData.amount || !formData.target}
+              className="flex-1 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              disabled={!formData.title || !formData.description || !formData.amount || !formData.target}
             >
-              {loading ? 'Creating...' : 'Create Proposal'}
+              Create Proposal
             </button>
           </div>
         </div>
@@ -1002,12 +582,7 @@ const InvestmentClubDAO = () => {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-500" />
           <p className="text-red-700">{error}</p>
-          <button 
-            onClick={() => setError('')}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
+          <button onClick={() => setError('')} className="ml-auto text-red-500 hover:text-red-700">✕</button>
         </div>
       )}
 
@@ -1026,7 +601,7 @@ const InvestmentClubDAO = () => {
             <div>
               <p className="text-sm text-gray-600">Total TVL</p>
               <p className="text-2xl font-bold text-gray-900">
-                ${clubs.reduce((acc, club) => acc + club.treasury, 0).toLocaleString()}
+                ${clubs.reduce((acc, club) => acc + calculateClubTreasury(club.id), 0).toLocaleString()}
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-green-500" />
@@ -1070,51 +645,56 @@ const InvestmentClubDAO = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {clubs.map(club => (
-          <div key={club.id} className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition-shadow">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-bold">{club.name}</h3>
-              <button
-                onClick={() => setSelectedClub(club)}
-                className="text-blue-600 hover:text-blue-700"
-              >
-                <ExternalLink className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-gray-600 mb-4 text-sm">{club.description}</p>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <p className="text-sm text-gray-500">Treasury</p>
-                <p className="font-semibold">${club.treasury.toLocaleString()}</p>
+        {clubs.map(club => {
+          const clubTreasury = calculateClubTreasury(club.id);
+          const isUserLeader = club.creator === userAccount;
+          
+          return (
+            <div key={club.id} className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-bold">{club.name}</h3>
+                  {isUserLeader && <Crown className="w-5 h-5 text-yellow-500" title="You are the leader" />}
+                </div>
+                <button
+                  onClick={() => setSelectedClub(club)}
+                  className="text-blue-600 hover:text-blue-700"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                </button>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Members</p>
-                <p className="font-semibold">{club.members}</p>
+              <p className="text-gray-600 mb-4 text-sm">{club.description}</p>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <p className="text-sm text-gray-500">Treasury</p>
+                  <p className="font-semibold">${clubTreasury.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Members</p>
+                  <p className="font-semibold">{club.members}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Proposals</p>
+                  <p className="font-semibold">{proposals.filter(p => p.clubId === club.id).length}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Proposals</p>
-                <p className="font-semibold">{proposals.filter(p => p.clubId === club.id).length}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setSelectedClub(club); setShowDepositModal(true); }}
+                  className="flex-1 bg-green-600 text-white py-2 px-3 rounded-lg hover:bg-green-700 text-sm"
+                >
+                  Deposit
+                </button>
+                <button
+                  onClick={() => setSelectedClub(club)}
+                  className="flex-1 border border-blue-600 text-blue-600 py-2 px-3 rounded-lg hover:bg-blue-50 text-sm"
+                >
+                  View Details
+                </button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setSelectedClub(club);
-                  setShowDepositModal(true);
-                }}
-                className="flex-1 bg-green-600 text-white py-2 px-3 rounded-lg hover:bg-green-700 text-sm"
-              >
-                Deposit
-              </button>
-              <button
-                onClick={() => setSelectedClub(club)}
-                className="flex-1 border border-blue-600 text-blue-600 py-2 px-3 rounded-lg hover:bg-blue-50 text-sm"
-              >
-                View Details
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1124,14 +704,24 @@ const InvestmentClubDAO = () => {
 
     const clubProposals = proposals.filter(p => p.clubId === selectedClub.id);
     const clubMembers = members.filter(m => m.clubId === selectedClub.id);
+    const clubTreasury = calculateClubTreasury(selectedClub.id);
+    const isUserLeader = isLeader(selectedClub.id);
 
     return (
       <div className="space-y-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h1 className="text-3xl font-bold">{selectedClub.name}</h1>
-              <p className="text-gray-600 mt-2">{selectedClub.description}</p>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold">{selectedClub.name}</h1>
+                {isUserLeader && (
+                  <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-2 py-1 rounded-full text-sm">
+                    <Crown className="w-4 h-4" />
+                    <span>Leader</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-gray-600">{selectedClub.description}</p>
             </div>
             <button
               onClick={() => setSelectedClub(null)}
@@ -1144,11 +734,11 @@ const InvestmentClubDAO = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
               <p className="text-sm text-gray-500">Treasury Balance</p>
-              <p className="text-2xl font-bold text-green-600">${selectedClub.treasury.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-green-600">${clubTreasury.toLocaleString()}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Members</p>
-              <p className="text-2xl font-bold">{selectedClub.members}</p>
+              <p className="text-2xl font-bold">{clubMembers.length}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Active Proposals</p>
@@ -1181,20 +771,15 @@ const InvestmentClubDAO = () => {
             >
               Create Proposal
             </button>
-            <button
-              onClick={() => setShowAddMemberModal(true)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <UserPlus className="w-4 h-4" />
-              Add Member
-            </button>
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="border border-purple-600 text-purple-600 px-6 py-2 rounded-lg hover:bg-purple-50 flex items-center gap-2"
-            >
-              <Mail className="w-4 h-4" />
-              Send Invite
-            </button>
+            {isUserLeader && (
+              <button
+                onClick={() => setShowAddMemberModal(true)}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Member
+              </button>
+            )}
           </div>
         </div>
 
@@ -1202,9 +787,14 @@ const InvestmentClubDAO = () => {
           <h2 className="text-xl font-bold mb-4">Proposals</h2>
           <div className="space-y-4">
             {clubProposals.map(proposal => {
-              const yesPercentage = proposal.totalVotes > 0 ? (proposal.votesYes / proposal.totalVotes) * 100 : 0;
-              const noPercentage = proposal.totalVotes > 0 ? (proposal.votesNo / proposal.totalVotes) * 100 : 0;
-              const canExecute = proposal.status === 'active' && proposal.votesYes > proposal.votesNo && proposal.votesYes > 0;
+              const calculatedVotes = calculateProposalVotes(proposal.id);
+              const yesPercentage = calculatedVotes.totalVotes > 0 ? (calculatedVotes.votesYes / calculatedVotes.totalVotes) * 100 : 0;
+              const noPercentage = calculatedVotes.totalVotes > 0 ? (calculatedVotes.votesNo / calculatedVotes.totalVotes) * 100 : 0;
+              
+              const userVote = proposal.votes?.find(v => v.address === userAccount);
+              const hasUserVoted = !!userVote;
+              const userMember = clubMembers.find(m => m.address === userAccount);
+              const canVote = userMember && userMember.contribution > 0;
               
               return (
                 <div key={proposal.id} className="border rounded-lg p-4">
@@ -1216,7 +806,6 @@ const InvestmentClubDAO = () => {
                         Amount: ${proposal.amount.toLocaleString()} | 
                         Proposer: {proposal.proposer} | 
                         Deadline: {proposal.deadline}
-                        {proposal.target && ` | Target: ${proposal.target.slice(0, 10)}...`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1226,77 +815,56 @@ const InvestmentClubDAO = () => {
                       {proposal.status === 'passed' && (
                         <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Passed</span>
                       )}
-                      {proposal.status === 'executed' && (
-                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Executed</span>
-                      )}
                     </div>
                   </div>
                   
                   <div className="mb-3">
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Yes: {proposal.votesYes.toLocaleString()} ({yesPercentage.toFixed(1)}%)</span>
-                      <span>No: {proposal.votesNo.toLocaleString()} ({noPercentage.toFixed(1)}%)</span>
+                      <span>Yes: {calculatedVotes.votesYes.toLocaleString()} USDC ({yesPercentage.toFixed(1)}%)</span>
+                      <span>No: {calculatedVotes.votesNo.toLocaleString()} USDC ({noPercentage.toFixed(1)}%)</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className="bg-green-500 h-2 rounded-full" 
+                        className="bg-green-500 h-2 rounded-full transition-all duration-300" 
                         style={{width: `${yesPercentage}%`}}
                       ></div>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Total voting weight: {calculatedVotes.totalVotes.toLocaleString()} USDC
+                    </p>
                   </div>
                   
-                  <div className="flex gap-2">
-                    {proposal.status === 'active' && userAccount && userDeposit > 0 && !proposal.hasUserVoted && (
+                  <div className="flex gap-2 flex-wrap">
+                    {proposal.status === 'active' && userAccount && canVote && !hasUserVoted && (
                       <>
                         <button
-                          onClick={() => {
-                            // Try smart contract vote first, fallback to mock
-                            if (daoContract && userAccount && web3) {
-                              handleVote(proposal.id, true);
-                            } else {
-                              vote(proposal.id, 'yes');
-                            }
-                          }}
-                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-1 disabled:opacity-50"
-                          disabled={loading}
+                          onClick={() => vote(proposal.id, 'yes')}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-1"
                         >
                           <CheckCircle className="w-4 h-4" />
                           Vote Yes
                         </button>
                         <button
-                          onClick={() => {
-                            // Try smart contract vote first, fallback to mock
-                            if (daoContract && userAccount && web3) {
-                              handleVote(proposal.id, false);
-                            } else {
-                              vote(proposal.id, 'no');
-                            }
-                          }}
-                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-1 disabled:opacity-50"
-                          disabled={loading}
+                          onClick={() => vote(proposal.id, 'no')}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-1"
                         >
                           <XCircle className="w-4 h-4" />
                           Vote No
                         </button>
                       </>
                     )}
-                    {proposal.hasUserVoted && (
-                      <span className="text-sm text-gray-500">You have already voted</span>
+                    {hasUserVoted && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span>
+                          You voted: <strong>{userVote.support ? 'Yes' : 'No'}</strong> 
+                          ({userVote.weight.toLocaleString()} USDC)
+                        </span>
+                      </div>
                     )}
-                    {canExecute && userAccount && (
-                      <button
-                        onClick={() => {
-                          if (daoContract && userAccount && web3) {
-                            handleExecuteProposal(proposal.id);
-                          } else {
-                            alert('Proposal executed!');
-                          }
-                        }}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        disabled={loading}
-                      >
-                        Execute Proposal
-                      </button>
+                    {!canVote && userAccount && (
+                      <span className="text-sm text-gray-500">
+                        You must deposit funds to vote
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1311,7 +879,7 @@ const InvestmentClubDAO = () => {
         <div className="bg-white p-6 rounded-xl shadow-sm border">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">Members ({clubMembers.length})</h2>
-            <div className="flex gap-2">
+            {isUserLeader && (
               <button
                 onClick={() => setShowAddMemberModal(true)}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
@@ -1319,46 +887,44 @@ const InvestmentClubDAO = () => {
                 <UserPlus className="w-4 h-4" />
                 Add Member
               </button>
-              <button
-                onClick={() => setShowInviteModal(true)}
-                className="border border-purple-600 text-purple-600 px-4 py-2 rounded-lg hover:bg-purple-50 flex items-center gap-2 text-sm"
-              >
-                <Mail className="w-4 h-4" />
-                Send Invite
-              </button>
-            </div>
+            )}
           </div>
           <div className="space-y-3">
-            {clubMembers.map((member) => (
-              <div key={member.id} className="flex justify-between items-center p-3 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    {member.role === 'Founder' ? <Crown className="w-4 h-4 text-blue-600" /> : 
-                     member.role === 'Treasurer' ? <Coins className="w-4 h-4 text-green-600" /> : 
-                     <User className="w-4 h-4 text-gray-600" />}
+            {clubMembers.map((member) => {
+              const votingPower = calculateVotingPower(member.contribution, selectedClub.id);
+              return (
+                <div key={member.id} className="flex justify-between items-center p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      {member.role === 'Leader' ? <Crown className="w-4 h-4 text-blue-600" /> : 
+                       <User className="w-4 h-4 text-gray-600" />}
+                    </div>
+                    <div>
+                      <p className="font-medium">{member.address}</p>
+                      <p className="text-sm text-gray-500">{member.role} • Joined {member.joinDate}</p>
+                      {member.addedBy && (
+                        <p className="text-xs text-gray-400">Added by {member.addedBy.slice(0, 8)}...</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{member.address}</p>
-                    <p className="text-sm text-gray-500">{member.role} • Joined {member.joinDate}</p>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-medium">${member.contribution.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500">{votingPower.toFixed(1)}% voting power</p>
+                    </div>
+                    {member.role !== 'Leader' && isUserLeader && (
+                      <button
+                        onClick={() => removeMember(member.id, selectedClub.id)}
+                        className="text-red-600 hover:text-red-700 p-1"
+                        title="Remove member"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="font-medium">${member.contribution.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">{member.votingPower} voting power</p>
-                  </div>
-                  {member.role !== 'Founder' && userAccount === selectedClub.creator && (
-                    <button
-                      onClick={() => removeMember(member.id)}
-                      className="text-red-600 hover:text-red-700 p-1"
-                      title="Remove member"
-                    >
-                      <XCircle className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1367,7 +933,6 @@ const InvestmentClubDAO = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -1385,45 +950,23 @@ const InvestmentClubDAO = () => {
               >
                 Dashboard
               </button>
-              <button className="text-gray-500 hover:text-gray-700 text-sm font-medium">
-                Analytics
-              </button>
-              <button className="text-gray-500 hover:text-gray-700 text-sm font-medium">
-                Docs
-              </button>
             </nav>
 
             <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-500">
-                {networkId === 80001 ? 'Mumbai Testnet' : 
-                 networkId === 137 ? 'Polygon Mainnet' : 
-                 'Polygon Testnet'}
-              </div>
+              <div className="text-sm text-gray-500">Polygon Testnet</div>
               {!userAccount ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={connectWallet}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                    disabled={loading}
-                  >
-                    <Wallet className="w-4 h-4" />
-                    {loading ? 'Connecting...' : 'Connect Wallet'}
-                  </button>
-                  <button
-                    onClick={connectTestWallet}
-                    className="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 text-sm"
-                    disabled={loading}
-                  >
-                    Test Mode
-                  </button>
-                </div>
+                <button
+                  onClick={connectTestWallet}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Connect Test Wallet
+                </button>
               ) : (
                 <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-lg">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   <span className="text-sm font-medium">{userAccount.slice(0, 6)}...{userAccount.slice(-4)}</span>
-                  {userAccount === "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca" && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Test Mode</span>
-                  )}
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Test Mode</span>
                 </div>
               )}
             </div>
@@ -1431,19 +974,15 @@ const InvestmentClubDAO = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {selectedClub ? renderClubDetails() : renderDashboard()}
       </main>
 
-      {/* Modals */}
       {showCreateModal && <CreateClubModal />}
       {showDepositModal && <DepositModal />}
       {showProposalModal && <ProposalModal />}
       {showAddMemberModal && <AddMemberModal />}
-      {showInviteModal && <InviteMemberModal />}
 
-      {/* Footer */}
       <footer className="bg-white border-t mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-between items-center">
@@ -1456,11 +995,7 @@ const InvestmentClubDAO = () => {
             <div className="flex items-center gap-4 text-sm text-gray-500">
               <span>Built on Polygon</span>
               <span>•</span>
-              <span>Powered by Smart Contracts</span>
-              <span>•</span>
-              <a href="#" className="hover:text-blue-600 flex items-center gap-1">
-                View on Explorer <ExternalLink className="w-3 h-3" />
-              </a>
+              <span>Leader-Controlled Membership</span>
             </div>
           </div>
         </div>
