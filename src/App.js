@@ -1,54 +1,55 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   Wallet, 
   Vote, 
   TrendingUp, 
-  Shield, 
   Plus, 
   ExternalLink,
   DollarSign,
-  Clock,
   CheckCircle,
   XCircle,
   Crown,
   User,
-  Settings,
-  BarChart3,
-  Coins
+  Coins,
+  UserPlus,
+  Mail,
+  Copy
 } from 'lucide-react';
 
 const InvestmentClubDAO = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedClub, setSelectedClub] = useState(null);
   const [userAccount, setUserAccount] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showProposalModal, setShowProposalModal] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
-  // Mock data - in real app, this would come from blockchain
   const [clubs, setClubs] = useState([
     {
       id: 1,
       name: "DeFi Innovators",
       description: "Focused on emerging DeFi protocols and yield farming opportunities",
       treasury: 125000,
-      members: 12,
+      members: 3,
       proposals: 3,
       contractAddress: "0x742d35Cc6C1F5b2E123C7E9C27...abcd",
       creator: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca",
-      created: "2024-01-15"
+      created: "2024-01-15",
+      inviteCode: "DEFI-INV-2024"
     },
     {
       id: 2,
       name: "Blue Chip Holdings",
       description: "Conservative investments in established cryptocurrencies",
       treasury: 89500,
-      members: 8,
+      members: 2,
       proposals: 1,
       contractAddress: "0x951f29Bb7F3C2D891B5F8A27...efgh",
       creator: "0x951f29Bb...efgh", 
-      created: "2024-02-03"
+      created: "2024-02-03",
+      inviteCode: "BLUE-INV-2024"
     }
   ]);
 
@@ -85,31 +86,64 @@ const InvestmentClubDAO = () => {
 
   const [members, setMembers] = useState([
     {
+      id: 1,
+      clubId: 1,
       address: "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca",
       contribution: 25000,
       role: "Founder",
       votingPower: "22.1%",
-      joinDate: "2024-01-15"
+      joinDate: "2024-01-15",
+      status: "active"
     },
     {
+      id: 2,
+      clubId: 1,
       address: "0x951f29Bb7F3C2D891B5F8A27...efgh", 
       contribution: 18500,
       role: "Treasurer",
       votingPower: "16.4%",
-      joinDate: "2024-01-20"
+      joinDate: "2024-01-20",
+      status: "active"
     },
     {
+      id: 3,
+      clubId: 1,
       address: "0x123abc45...ijkl",
       contribution: 15000,
       role: "Member",
       votingPower: "13.3%",
-      joinDate: "2024-01-25"
+      joinDate: "2024-01-25",
+      status: "active"
+    },
+    {
+      id: 4,
+      clubId: 2,
+      address: "0x951f29Bb...efgh",
+      contribution: 30000,
+      role: "Founder",
+      votingPower: "33.5%",
+      joinDate: "2024-02-03",
+      status: "active"
+    },
+    {
+      id: 5,
+      clubId: 2,
+      address: "0xabc123...xyz",
+      contribution: 15000,
+      role: "Member",
+      votingPower: "16.8%",
+      joinDate: "2024-02-10",
+      status: "active"
     }
   ]);
 
-  // Mock wallet connection
   const connectWallet = async () => {
     setUserAccount("0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca");
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard!');
   };
 
   const CreateClubModal = () => {
@@ -126,9 +160,23 @@ const InvestmentClubDAO = () => {
           proposals: 0,
           contractAddress: `0x${Math.random().toString(16).substr(2, 40)}`,
           creator: userAccount,
-          created: new Date().toISOString().split('T')[0]
+          created: new Date().toISOString().split('T')[0],
+          inviteCode: `${formData.name.toUpperCase().slice(0, 4)}-INV-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
         };
         setClubs([...clubs, newClub]);
+        
+        const newMember = {
+          id: members.length + 1,
+          clubId: newClub.id,
+          address: userAccount,
+          contribution: 0,
+          role: "Founder",
+          votingPower: "100%",
+          joinDate: new Date().toISOString().split('T')[0],
+          status: "active"
+        };
+        setMembers([...members, newMember]);
+        
         setShowCreateModal(false);
         setFormData({ name: '', description: '' });
       }
@@ -138,41 +186,213 @@ const InvestmentClubDAO = () => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl p-6 w-full max-w-md">
           <h2 className="text-2xl font-bold mb-4">Create Investment Club</h2>
-          <div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Club Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className="w-full p-3 border rounded-lg"
+              placeholder="Enter club name"
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              className="w-full p-3 border rounded-lg h-24 resize-none"
+              placeholder="Describe your investment focus"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Create Club
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const AddMemberModal = () => {
+    const [memberAddress, setMemberAddress] = useState('');
+    const [initialRole, setInitialRole] = useState('Member');
+    
+    const handleAddMember = () => {
+      if (memberAddress && selectedClub) {
+        const newMember = {
+          id: members.length + 1,
+          clubId: selectedClub.id,
+          address: memberAddress,
+          contribution: 0,
+          role: initialRole,
+          votingPower: "0%",
+          joinDate: new Date().toISOString().split('T')[0],
+          status: "active"
+        };
+        
+        setMembers([...members, newMember]);
+        
+        const updatedClubs = clubs.map(club => 
+          club.id === selectedClub.id 
+            ? {...club, members: club.members + 1}
+            : club
+        );
+        setClubs(updatedClubs);
+        setSelectedClub({...selectedClub, members: selectedClub.members + 1});
+        
+        setShowAddMemberModal(false);
+        setMemberAddress('');
+        setInitialRole('Member');
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl p-6 w-full max-w-md">
+          <h2 className="text-2xl font-bold mb-4">Add New Member</h2>
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">
+              Adding to: <strong>{selectedClub?.name}</strong>
+            </p>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Wallet Address</label>
+            <input
+              type="text"
+              value={memberAddress}
+              onChange={(e) => setMemberAddress(e.target.value)}
+              className="w-full p-3 border rounded-lg font-mono text-sm"
+              placeholder="0x..."
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">Initial Role</label>
+            <select
+              value={initialRole}
+              onChange={(e) => setInitialRole(e.target.value)}
+              className="w-full p-3 border rounded-lg"
+            >
+              <option value="Member">Member</option>
+              <option value="Treasurer">Treasurer</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowAddMemberModal(false)}
+              className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddMember}
+              className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Add Member
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const InviteMemberModal = () => {
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [generatedLink, setGeneratedLink] = useState('');
+    
+    const handleGenerateInvite = () => {
+      if (selectedClub) {
+        const inviteLink = `https://investdao.app/join/${selectedClub.inviteCode}`;
+        setGeneratedLink(inviteLink);
+      }
+    };
+
+    const handleSendInvite = () => {
+      alert(`Invite sent to ${inviteEmail}!`);
+      setShowInviteModal(false);
+      setInviteEmail('');
+      setGeneratedLink('');
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl p-6 w-full max-w-md">
+          <h2 className="text-2xl font-bold mb-4">Invite Member</h2>
+          <div className="mb-4 p-4 bg-purple-50 rounded-lg">
+            <p className="text-sm text-purple-800">
+              Inviting to: <strong>{selectedClub?.name}</strong>
+            </p>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Email Address</label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="w-full p-3 border rounded-lg"
+              placeholder="Enter email address"
+            />
+          </div>
+          
+          {!generatedLink ? (
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Club Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full p-3 border rounded-lg"
-                placeholder="Enter club name"
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full p-3 border rounded-lg h-24 resize-none"
-                placeholder="Describe your investment focus"
-              />
-            </div>
-            <div className="flex gap-3">
               <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+                onClick={handleGenerateInvite}
+                className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Create Club
+                Generate Invite Link
               </button>
             </div>
+          ) : (
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Invite Link</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={generatedLink}
+                  readOnly
+                  className="flex-1 p-3 border rounded-lg bg-gray-50 text-sm font-mono"
+                />
+                <button
+                  onClick={() => copyToClipboard(generatedLink)}
+                  className="p-3 border rounded-lg hover:bg-gray-50"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowInviteModal(false);
+                setInviteEmail('');
+                setGeneratedLink('');
+              }}
+              className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            {generatedLink && (
+              <button
+                onClick={handleSendInvite}
+                className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Send Invite
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -191,6 +411,14 @@ const InvestmentClubDAO = () => {
         );
         setClubs(updatedClubs);
         setSelectedClub({...selectedClub, treasury: selectedClub.treasury + parseFloat(amount)});
+        
+        const updatedMembers = members.map(member => 
+          member.clubId === selectedClub.id && member.address === userAccount
+            ? {...member, contribution: member.contribution + parseFloat(amount)}
+            : member
+        );
+        setMembers(updatedMembers);
+        
         setShowDepositModal(false);
         setAmount('');
       }
@@ -205,33 +433,30 @@ const InvestmentClubDAO = () => {
               Depositing to: <strong>{selectedClub?.name}</strong>
             </p>
           </div>
-          <div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Amount (USDC)</label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full p-3 border rounded-lg"
-                placeholder="Enter amount"
-                min="1"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowDepositModal(false)}
-                className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeposit}
-                className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Deposit
-              </button>
-            </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">Amount (USDC)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full p-3 border rounded-lg"
+              placeholder="Enter amount"
+              min="1"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDepositModal(false)}
+              className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeposit}
+              className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              Deposit
+            </button>
           </div>
         </div>
       </div>
@@ -267,52 +492,49 @@ const InvestmentClubDAO = () => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl p-6 w-full max-w-md">
           <h2 className="text-2xl font-bold mb-4">Create Proposal</h2>
-          <div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Proposal Title</label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({...formData, title: e.target.value})}
-                className="w-full p-3 border rounded-lg"
-                placeholder="Enter proposal title"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full p-3 border rounded-lg h-20 resize-none"
-                placeholder="Describe the investment proposal"
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Investment Amount (USDC)</label>
-              <input
-                type="number"
-                value={formData.amount}
-                onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                className="w-full p-3 border rounded-lg"
-                placeholder="Enter amount"
-                min="1"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowProposalModal(false)}
-                className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="flex-1 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-              >
-                Create Proposal
-              </button>
-            </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Proposal Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              className="w-full p-3 border rounded-lg"
+              placeholder="Enter proposal title"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              className="w-full p-3 border rounded-lg h-20 resize-none"
+              placeholder="Describe the investment proposal"
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">Investment Amount (USDC)</label>
+            <input
+              type="number"
+              value={formData.amount}
+              onChange={(e) => setFormData({...formData, amount: e.target.value})}
+              className="w-full p-3 border rounded-lg"
+              placeholder="Enter amount"
+              min="1"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowProposalModal(false)}
+              className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="flex-1 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            >
+              Create Proposal
+            </button>
           </div>
         </div>
       </div>
@@ -320,7 +542,7 @@ const InvestmentClubDAO = () => {
   };
 
   const vote = (proposalId, voteType) => {
-    const voteWeight = 1000; // Mock vote weight
+    const voteWeight = 1000;
     setProposals(proposals.map(proposal => 
       proposal.id === proposalId
         ? {
@@ -333,9 +555,22 @@ const InvestmentClubDAO = () => {
     ));
   };
 
+  const removeMember = (memberId) => {
+    if (window.confirm('Are you sure you want to remove this member?')) {
+      setMembers(members.filter(member => member.id !== memberId));
+      
+      const updatedClubs = clubs.map(club => 
+        club.id === selectedClub.id 
+          ? {...club, members: club.members - 1}
+          : club
+      );
+      setClubs(updatedClubs);
+      setSelectedClub({...selectedClub, members: selectedClub.members - 1});
+    }
+  };
+
   const renderDashboard = () => (
     <div className="space-y-6">
-      {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border">
           <div className="flex items-center justify-between">
@@ -381,16 +616,17 @@ const InvestmentClubDAO = () => {
         </div>
       </div>
 
-      {/* Clubs Grid */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Investment Clubs</h2>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Create Club
-        </button>
+        {userAccount && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Create Club
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -447,10 +683,10 @@ const InvestmentClubDAO = () => {
     if (!selectedClub) return null;
 
     const clubProposals = proposals.filter(p => p.clubId === selectedClub.id);
+    const clubMembers = members.filter(m => m.clubId === selectedClub.id);
 
     return (
       <div className="space-y-6">
-        {/* Club Header */}
         <div className="bg-white p-6 rounded-xl shadow-sm border">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -479,12 +715,20 @@ const InvestmentClubDAO = () => {
               <p className="text-2xl font-bold">{clubProposals.filter(p => p.status === 'active').length}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Contract Address</p>
-              <p className="text-sm font-mono text-blue-600">{selectedClub.contractAddress}</p>
+              <p className="text-sm text-gray-500">Invite Code</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-mono text-blue-600">{selectedClub.inviteCode}</p>
+                <button
+                  onClick={() => copyToClipboard(selectedClub.inviteCode)}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button
               onClick={() => setShowDepositModal(true)}
               className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
@@ -497,10 +741,23 @@ const InvestmentClubDAO = () => {
             >
               Create Proposal
             </button>
+            <button
+              onClick={() => setShowAddMemberModal(true)}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Member
+            </button>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="border border-purple-600 text-purple-600 px-6 py-2 rounded-lg hover:bg-purple-50 flex items-center gap-2"
+            >
+              <Mail className="w-4 h-4" />
+              Send Invite
+            </button>
           </div>
         </div>
 
-        {/* Proposals */}
         <div className="bg-white p-6 rounded-xl shadow-sm border">
           <h2 className="text-xl font-bold mb-4">Proposals</h2>
           <div className="space-y-4">
@@ -567,12 +824,29 @@ const InvestmentClubDAO = () => {
           </div>
         </div>
 
-        {/* Members */}
         <div className="bg-white p-6 rounded-xl shadow-sm border">
-          <h2 className="text-xl font-bold mb-4">Members</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Members ({clubMembers.length})</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAddMemberModal(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Member
+              </button>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="border border-purple-600 text-purple-600 px-4 py-2 rounded-lg hover:bg-purple-50 flex items-center gap-2 text-sm"
+              >
+                <Mail className="w-4 h-4" />
+                Send Invite
+              </button>
+            </div>
+          </div>
           <div className="space-y-3">
-            {members.map((member, index) => (
-              <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
+            {clubMembers.map((member) => (
+              <div key={member.id} className="flex justify-between items-center p-3 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                     {member.role === 'Founder' ? <Crown className="w-4 h-4 text-blue-600" /> : 
@@ -581,12 +855,23 @@ const InvestmentClubDAO = () => {
                   </div>
                   <div>
                     <p className="font-medium">{member.address}</p>
-                    <p className="text-sm text-gray-500">{member.role}</p>
+                    <p className="text-sm text-gray-500">{member.role} • Joined {member.joinDate}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">${member.contribution.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">{member.votingPower} voting power</p>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="font-medium">${member.contribution.toLocaleString()}</p>
+                    <p className="text-sm text-gray-500">{member.votingPower} voting power</p>
+                  </div>
+                  {member.role !== 'Founder' && userAccount === selectedClub.creator && (
+                    <button
+                      onClick={() => removeMember(member.id)}
+                      className="text-red-600 hover:text-red-700 p-1"
+                      title="Remove member"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -611,10 +896,8 @@ const InvestmentClubDAO = () => {
             
             <nav className="flex items-center gap-6">
               <button
-                onClick={() => {setActiveTab('dashboard'); setSelectedClub(null);}}
-                className={`px-3 py-2 rounded-md text-sm font-medium ${
-                  activeTab === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                onClick={() => setSelectedClub(null)}
+                className="text-gray-500 hover:text-gray-700 text-sm font-medium"
               >
                 Dashboard
               </button>
@@ -656,6 +939,8 @@ const InvestmentClubDAO = () => {
       {showCreateModal && <CreateClubModal />}
       {showDepositModal && <DepositModal />}
       {showProposalModal && <ProposalModal />}
+      {showAddMemberModal && <AddMemberModal />}
+      {showInviteModal && <InviteMemberModal />}
 
       {/* Footer */}
       <footer className="bg-white border-t mt-16">
