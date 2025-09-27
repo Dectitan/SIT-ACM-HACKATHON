@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Wallet, 
@@ -25,6 +25,11 @@ const InvestmentClubDAO = () => {
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // Set document title
+  useEffect(() => {
+    document.title = 'InvestDAO';
+  }, []);
 
   const [clubs, setClubs] = useState([
     {
