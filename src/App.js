@@ -14,23 +14,154 @@ import {
   Coins,
   UserPlus,
   Mail,
-  Copy
+  Copy,
+  AlertCircle
 } from 'lucide-react';
 
+// Contract ABIs - simplified for Web3.js
+const DAO_ABI = [
+  {
+    "inputs": [{"name": "_amount", "type": "uint256"}],
+    "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "_description", "type": "string"},
+      {"name": "_amount", "type": "uint256"},
+      {"name": "_target", "type": "address"}
+    ],
+    "name": "createProposal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "_proposalId", "type": "uint256"},
+      {"name": "_support", "type": "bool"}
+    ],
+    "name": "vote",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"name": "_proposalId", "type": "uint256"}],
+    "name": "executeProposal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMembers",
+    "outputs": [{"name": "", "type": "address[]"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"name": "_id", "type": "uint256"}],
+    "name": "getProposal",
+    "outputs": [
+      {"name": "id", "type": "uint256"},
+      {"name": "description", "type": "string"},
+      {"name": "amount", "type": "uint256"},
+      {"name": "target", "type": "address"},
+      {"name": "yesVotes", "type": "uint256"},
+      {"name": "noVotes", "type": "uint256"},
+      {"name": "executed", "type": "bool"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "_proposalId", "type": "uint256"},
+      {"name": "_member", "type": "address"}
+    ],
+    "name": "hasVoted",
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"name": "", "type": "address"}],
+    "name": "deposits",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "proposalCount",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
+const USDC_ABI = [
+  {
+    "inputs": [{"name": "account", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "to", "type": "address"},
+      {"name": "amount", "type": "uint256"}
+    ],
+    "name": "transfer",
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "spender", "type": "address"},
+      {"name": "amount", "type": "uint256"}
+    ],
+    "name": "approve",
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+];
+
 const InvestmentClubDAO = () => {
-  const [selectedClub, setSelectedClub] = useState(null);
+  // Web3 and contract states
+  const [web3, setWeb3] = useState(null);
   const [userAccount, setUserAccount] = useState(null);
+  const [daoContract, setDaoContract] = useState(null);
+  const [usdcContract, setUsdcContract] = useState(null);
+  const [networkId, setNetworkId] = useState(null);
+
+  // Contract addresses (update these with your deployed addresses)
+  const CONTRACT_ADDRESSES = {
+    80001: { // Mumbai testnet
+      DAO: "0x...", // Your deployed DAO contract address
+      USDC: "0x..." // Your deployed MockUSDC address
+    },
+    137: { // Polygon mainnet
+      DAO: "0x...",
+      USDC: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" // Real USDC on Polygon
+    }
+  };
+
+  // App states (keeping all original functionality)
+  const [selectedClub, setSelectedClub] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
-  // Set document title
-  useEffect(() => {
-    document.title = 'InvestDAO';
-  }, []);
-
+  // Data states (original structure + smart contract data)
   const [clubs, setClubs] = useState([
     {
       id: 1,
@@ -71,7 +202,8 @@ const InvestmentClubDAO = () => {
       votesNo: 3100,
       totalVotes: 11300,
       deadline: "2024-03-15",
-      created: "2024-03-01"
+      created: "2024-03-01",
+      hasUserVoted: false
     },
     {
       id: 2,
@@ -85,7 +217,8 @@ const InvestmentClubDAO = () => {
       votesNo: 2100,
       totalVotes: 11900,
       deadline: "2024-02-28",
-      created: "2024-02-15"
+      created: "2024-02-15",
+      hasUserVoted: false
     }
   ]);
 
@@ -142,15 +275,294 @@ const InvestmentClubDAO = () => {
     }
   ]);
 
-  const connectWallet = async () => {
-    setUserAccount("0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca");
+  // Smart contract specific states
+  const [treasury, setTreasury] = useState(0);
+  const [userBalance, setUserBalance] = useState(0);
+  const [userDeposit, setUserDeposit] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Initialize Web3 and contracts
+  useEffect(() => {
+    initializeWeb3();
+  }, []);
+
+  // Set document title
+  useEffect(() => {
+    document.title = 'InvestDAO';
+  }, []);
+
+  const initializeWeb3 = async () => {
+    if (typeof window.ethereum !== 'undefined') {
+      try {
+        const Web3 = (await import('https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js')).default;
+        const web3Instance = new Web3(window.ethereum);
+        setWeb3(web3Instance);
+        
+        // Get network
+        const chainId = await web3Instance.eth.getChainId();
+        setNetworkId(chainId);
+        
+        // Check if already connected
+        const accounts = await web3Instance.eth.getAccounts();
+        if (accounts.length > 0) {
+          setUserAccount(accounts[0]);
+          await initializeContracts(web3Instance, accounts[0], chainId);
+        }
+      } catch (error) {
+        console.error('Error initializing Web3:', error);
+        setError('Failed to initialize Web3');
+      }
+    } else {
+      setError('Please install MetaMask to use this app');
+    }
   };
 
+  const initializeContracts = async (web3Instance, account, chainId) => {
+    try {
+      const addresses = CONTRACT_ADDRESSES[chainId];
+      if (!addresses) {
+        setError(`Unsupported network. Please switch to Polygon or Mumbai testnet.`);
+        return;
+      }
+
+      const dao = new web3Instance.eth.Contract(DAO_ABI, addresses.DAO);
+      const usdc = new web3Instance.eth.Contract(USDC_ABI, addresses.USDC);
+      
+      setDaoContract(dao);
+      setUsdcContract(usdc);
+      
+      await loadContractData(dao, usdc, account, web3Instance);
+    } catch (error) {
+      console.error('Error initializing contracts:', error);
+      setError('Failed to initialize contracts');
+    }
+  };
+
+  const loadContractData = async (dao, usdc, account, web3Instance) => {
+    try {
+      setLoading(true);
+      
+      // Load members from contract if available
+      if (dao && dao.options.address !== '0x...') {
+        const memberAddresses = await dao.methods.getMembers().call();
+        const memberData = await Promise.all(
+          memberAddresses.map(async (address, index) => {
+            const deposit = await dao.methods.deposits(address).call();
+            return {
+              id: index + 1,
+              clubId: 1, // For single DAO implementation
+              address,
+              contribution: parseFloat(web3Instance.utils.fromWei(deposit, 'mwei')),
+              role: index === 0 ? 'Founder' : 'Member',
+              joinDate: new Date().toISOString().split('T')[0],
+              status: 'active',
+              votingPower: '0%' // Calculate based on contribution
+            };
+          })
+        );
+        if (memberData.length > 0) {
+          setMembers(memberData);
+        }
+      }
+      
+      // Load treasury balance
+      if (usdc && dao && dao.options.address !== '0x...') {
+        const treasuryBalance = await usdc.methods.balanceOf(dao.options.address).call();
+        setTreasury(parseFloat(web3Instance.utils.fromWei(treasuryBalance, 'mwei')));
+        
+        // Update clubs with real treasury data
+        setClubs(prevClubs => prevClubs.map(club => 
+          club.id === 1 
+            ? {...club, treasury: parseFloat(web3Instance.utils.fromWei(treasuryBalance, 'mwei'))}
+            : club
+        ));
+      }
+      
+      if (account && usdc) {
+        // Load user balance
+        const balance = await usdc.methods.balanceOf(account).call();
+        setUserBalance(parseFloat(web3Instance.utils.fromWei(balance, 'mwei')));
+        
+        // Load user deposit
+        if (dao && dao.options.address !== '0x...') {
+          const deposit = await dao.methods.deposits(account).call();
+          setUserDeposit(parseFloat(web3Instance.utils.fromWei(deposit, 'mwei')));
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error loading contract data:', error);
+      setError('Failed to load contract data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const connectWallet = async () => {
+    if (!web3) {
+      setError('Web3 not initialized');
+      return;
+    }
+
+    try {
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await web3.eth.getAccounts();
+      const account = accounts[0];
+      setUserAccount(account);
+      
+      const chainId = await web3.eth.getChainId();
+      await initializeContracts(web3, account, chainId);
+      setError('');
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      setError('Failed to connect wallet');
+    }
+  };
+
+  // Function to connect with specific address for testing
+  const connectTestWallet = () => {
+    const testAccount = "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca";
+    setUserAccount(testAccount);
+    setNetworkId(80001); // Mumbai testnet
+    setError('');
+    // Note: Contract interactions won't work without proper wallet connection
+    // This is just for UI testing
+  };
+
+  const handleDeposit = async (amount) => {
+    if (!daoContract || !usdcContract || !userAccount || !web3) {
+      setError('Contracts not initialized');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const amountWei = web3.utils.toWei(amount.toString(), 'mwei');
+      
+      // First approve the DAO to spend USDC
+      await usdcContract.methods.approve(daoContract.options.address, amountWei)
+        .send({ from: userAccount });
+      
+      // Then deposit
+      await daoContract.methods.deposit(amountWei)
+        .send({ from: userAccount });
+      
+      // Reload data
+      await loadContractData(daoContract, usdcContract, userAccount, web3);
+      setError('');
+    } catch (error) {
+      console.error('Error depositing:', error);
+      setError('Failed to deposit funds');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateProposal = async (title, description, amount, target) => {
+    if (!daoContract || !userAccount || !web3) {
+      setError('Contract not initialized');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const amountWei = web3.utils.toWei(amount.toString(), 'mwei');
+      
+      await daoContract.methods.createProposal(title, amountWei, target)
+        .send({ from: userAccount });
+      
+      // Reload data
+      await loadContractData(daoContract, usdcContract, userAccount, web3);
+      setError('');
+    } catch (error) {
+      console.error('Error creating proposal:', error);
+      setError('Failed to create proposal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVote = async (proposalId, support) => {
+    if (!daoContract || !userAccount || !web3) {
+      setError('Contract not initialized');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await daoContract.methods.vote(proposalId, support)
+        .send({ from: userAccount });
+      
+      // Reload data
+      await loadContractData(daoContract, usdcContract, userAccount, web3);
+      setError('');
+    } catch (error) {
+      console.error('Error voting:', error);
+      setError('Failed to vote');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExecuteProposal = async (proposalId) => {
+    if (!daoContract || !userAccount || !web3) {
+      setError('Contract not initialized');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await daoContract.methods.executeProposal(proposalId)
+        .send({ from: userAccount });
+      
+      // Reload data
+      await loadContractData(daoContract, usdcContract, userAccount, web3);
+      setError('');
+    } catch (error) {
+      console.error('Error executing proposal:', error);
+      setError('Failed to execute proposal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Original utility functions
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
   };
 
+  const vote = (proposalId, voteType) => {
+    const voteWeight = 1000;
+    setProposals(proposals.map(proposal => 
+      proposal.id === proposalId
+        ? {
+            ...proposal,
+            votesYes: voteType === 'yes' ? proposal.votesYes + voteWeight : proposal.votesYes,
+            votesNo: voteType === 'no' ? proposal.votesNo + voteWeight : proposal.votesNo,
+            totalVotes: proposal.totalVotes + voteWeight,
+            hasUserVoted: true
+          }
+        : proposal
+    ));
+  };
+
+  const removeMember = (memberId) => {
+    if (window.confirm('Are you sure you want to remove this member?')) {
+      setMembers(members.filter(member => member.id !== memberId));
+      
+      const updatedClubs = clubs.map(club => 
+        club.id === selectedClub.id 
+          ? {...club, members: club.members - 1}
+          : club
+      );
+      setClubs(updatedClubs);
+      setSelectedClub({...selectedClub, members: selectedClub.members - 1});
+    }
+  };
+
+  // Modal Components
   const CreateClubModal = () => {
     const [formData, setFormData] = useState({ name: '', description: '' });
     
@@ -407,22 +819,30 @@ const InvestmentClubDAO = () => {
   const DepositModal = () => {
     const [amount, setAmount] = useState('');
     
-    const handleDeposit = () => {
-      if (amount && selectedClub) {
-        const updatedClubs = clubs.map(club => 
-          club.id === selectedClub.id 
-            ? {...club, treasury: club.treasury + parseFloat(amount)}
-            : club
-        );
-        setClubs(updatedClubs);
-        setSelectedClub({...selectedClub, treasury: selectedClub.treasury + parseFloat(amount)});
-        
-        const updatedMembers = members.map(member => 
-          member.clubId === selectedClub.id && member.address === userAccount
-            ? {...member, contribution: member.contribution + parseFloat(amount)}
-            : member
-        );
-        setMembers(updatedMembers);
+    const handleSubmit = async () => {
+      if (amount && parseFloat(amount) > 0) {
+        // Try smart contract deposit first, fallback to mock update
+        if (daoContract && usdcContract && userAccount && web3) {
+          await handleDeposit(parseFloat(amount));
+        } else {
+          // Mock functionality for testing
+          if (selectedClub) {
+            const updatedClubs = clubs.map(club => 
+              club.id === selectedClub.id 
+                ? {...club, treasury: club.treasury + parseFloat(amount)}
+                : club
+            );
+            setClubs(updatedClubs);
+            setSelectedClub({...selectedClub, treasury: selectedClub.treasury + parseFloat(amount)});
+            
+            const updatedMembers = members.map(member => 
+              member.clubId === selectedClub.id && member.address === userAccount
+                ? {...member, contribution: member.contribution + parseFloat(amount)}
+                : member
+            );
+            setMembers(updatedMembers);
+          }
+        }
         
         setShowDepositModal(false);
         setAmount('');
@@ -437,6 +857,11 @@ const InvestmentClubDAO = () => {
             <p className="text-sm text-blue-800">
               Depositing to: <strong>{selectedClub?.name}</strong>
             </p>
+            {userBalance > 0 && (
+              <p className="text-sm text-blue-800">
+                Your USDC Balance: <strong>{userBalance.toFixed(2)} USDC</strong>
+              </p>
+            )}
           </div>
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">Amount (USDC)</label>
@@ -446,21 +871,24 @@ const InvestmentClubDAO = () => {
               onChange={(e) => setAmount(e.target.value)}
               className="w-full p-3 border rounded-lg"
               placeholder="Enter amount"
-              min="1"
+              min="0"
+              step="0.01"
             />
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => setShowDepositModal(false)}
               className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+              disabled={loading}
             >
               Cancel
             </button>
             <button
-              onClick={handleDeposit}
-              className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              onClick={handleSubmit}
+              className="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              disabled={loading || !amount || parseFloat(amount) <= 0}
             >
-              Deposit
+              {loading ? 'Processing...' : 'Deposit'}
             </button>
           </div>
         </div>
@@ -469,27 +897,36 @@ const InvestmentClubDAO = () => {
   };
 
   const ProposalModal = () => {
-    const [formData, setFormData] = useState({ title: '', description: '', amount: '' });
+    const [formData, setFormData] = useState({ title: '', description: '', amount: '', target: '' });
     
-    const handleSubmit = () => {
-      if (formData.title && formData.description && formData.amount) {
-        const newProposal = {
-          id: proposals.length + 1,
-          clubId: selectedClub.id,
-          title: formData.title,
-          description: formData.description,
-          amount: parseFloat(formData.amount),
-          proposer: userAccount,
-          status: "active",
-          votesYes: 0,
-          votesNo: 0,
-          totalVotes: 0,
-          deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          created: new Date().toISOString().split('T')[0]
-        };
-        setProposals([...proposals, newProposal]);
+    const handleSubmit = async () => {
+      if (formData.title && formData.description && formData.amount && formData.target) {
+        // Try smart contract proposal creation first, fallback to mock
+        if (daoContract && userAccount && web3) {
+          await handleCreateProposal(formData.title, formData.description, parseFloat(formData.amount), formData.target);
+        } else {
+          // Mock functionality for testing
+          const newProposal = {
+            id: proposals.length + 1,
+            clubId: selectedClub.id,
+            title: formData.title,
+            description: formData.description,
+            amount: parseFloat(formData.amount),
+            proposer: userAccount,
+            status: "active",
+            votesYes: 0,
+            votesNo: 0,
+            totalVotes: 0,
+            deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            created: new Date().toISOString().split('T')[0],
+            hasUserVoted: false,
+            target: formData.target
+          };
+          setProposals([...proposals, newProposal]);
+        }
+        
         setShowProposalModal(false);
-        setFormData({ title: '', description: '', amount: '' });
+        setFormData({ title: '', description: '', amount: '', target: '' });
       }
     };
 
@@ -516,7 +953,7 @@ const InvestmentClubDAO = () => {
               placeholder="Describe the investment proposal"
             />
           </div>
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="block text-sm font-medium mb-2">Investment Amount (USDC)</label>
             <input
               type="number"
@@ -524,21 +961,34 @@ const InvestmentClubDAO = () => {
               onChange={(e) => setFormData({...formData, amount: e.target.value})}
               className="w-full p-3 border rounded-lg"
               placeholder="Enter amount"
-              min="1"
+              min="0"
+              step="0.01"
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">Target Address</label>
+            <input
+              type="text"
+              value={formData.target}
+              onChange={(e) => setFormData({...formData, target: e.target.value})}
+              className="w-full p-3 border rounded-lg font-mono text-sm"
+              placeholder="0x..."
             />
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => setShowProposalModal(false)}
               className="flex-1 py-3 border rounded-lg hover:bg-gray-50"
+              disabled={loading}
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              className="flex-1 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              className="flex-1 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              disabled={loading || !formData.title || !formData.description || !formData.amount || !formData.target}
             >
-              Create Proposal
+              {loading ? 'Creating...' : 'Create Proposal'}
             </button>
           </div>
         </div>
@@ -546,36 +996,21 @@ const InvestmentClubDAO = () => {
     );
   };
 
-  const vote = (proposalId, voteType) => {
-    const voteWeight = 1000;
-    setProposals(proposals.map(proposal => 
-      proposal.id === proposalId
-        ? {
-            ...proposal,
-            votesYes: voteType === 'yes' ? proposal.votesYes + voteWeight : proposal.votesYes,
-            votesNo: voteType === 'no' ? proposal.votesNo + voteWeight : proposal.votesNo,
-            totalVotes: proposal.totalVotes + voteWeight
-          }
-        : proposal
-    ));
-  };
-
-  const removeMember = (memberId) => {
-    if (window.confirm('Are you sure you want to remove this member?')) {
-      setMembers(members.filter(member => member.id !== memberId));
-      
-      const updatedClubs = clubs.map(club => 
-        club.id === selectedClub.id 
-          ? {...club, members: club.members - 1}
-          : club
-      );
-      setClubs(updatedClubs);
-      setSelectedClub({...selectedClub, members: selectedClub.members - 1});
-    }
-  };
-
   const renderDashboard = () => (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+          <p className="text-red-700">{error}</p>
+          <button 
+            onClick={() => setError('')}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border">
           <div className="flex items-center justify-between">
@@ -658,7 +1093,7 @@ const InvestmentClubDAO = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Proposals</p>
-                <p className="font-semibold">{club.proposals}</p>
+                <p className="font-semibold">{proposals.filter(p => p.clubId === club.id).length}</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -769,6 +1204,7 @@ const InvestmentClubDAO = () => {
             {clubProposals.map(proposal => {
               const yesPercentage = proposal.totalVotes > 0 ? (proposal.votesYes / proposal.totalVotes) * 100 : 0;
               const noPercentage = proposal.totalVotes > 0 ? (proposal.votesNo / proposal.totalVotes) * 100 : 0;
+              const canExecute = proposal.status === 'active' && proposal.votesYes > proposal.votesNo && proposal.votesYes > 0;
               
               return (
                 <div key={proposal.id} className="border rounded-lg p-4">
@@ -780,6 +1216,7 @@ const InvestmentClubDAO = () => {
                         Amount: ${proposal.amount.toLocaleString()} | 
                         Proposer: {proposal.proposer} | 
                         Deadline: {proposal.deadline}
+                        {proposal.target && ` | Target: ${proposal.target.slice(0, 10)}...`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -788,6 +1225,9 @@ const InvestmentClubDAO = () => {
                       )}
                       {proposal.status === 'passed' && (
                         <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Passed</span>
+                      )}
+                      {proposal.status === 'executed' && (
+                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Executed</span>
                       )}
                     </div>
                   </div>
@@ -805,27 +1245,66 @@ const InvestmentClubDAO = () => {
                     </div>
                   </div>
                   
-                  {proposal.status === 'active' && (
-                    <div className="flex gap-2">
+                  <div className="flex gap-2">
+                    {proposal.status === 'active' && userAccount && userDeposit > 0 && !proposal.hasUserVoted && (
+                      <>
+                        <button
+                          onClick={() => {
+                            // Try smart contract vote first, fallback to mock
+                            if (daoContract && userAccount && web3) {
+                              handleVote(proposal.id, true);
+                            } else {
+                              vote(proposal.id, 'yes');
+                            }
+                          }}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-1 disabled:opacity-50"
+                          disabled={loading}
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Vote Yes
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Try smart contract vote first, fallback to mock
+                            if (daoContract && userAccount && web3) {
+                              handleVote(proposal.id, false);
+                            } else {
+                              vote(proposal.id, 'no');
+                            }
+                          }}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-1 disabled:opacity-50"
+                          disabled={loading}
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Vote No
+                        </button>
+                      </>
+                    )}
+                    {proposal.hasUserVoted && (
+                      <span className="text-sm text-gray-500">You have already voted</span>
+                    )}
+                    {canExecute && userAccount && (
                       <button
-                        onClick={() => vote(proposal.id, 'yes')}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-1"
+                        onClick={() => {
+                          if (daoContract && userAccount && web3) {
+                            handleExecuteProposal(proposal.id);
+                          } else {
+                            alert('Proposal executed!');
+                          }
+                        }}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        disabled={loading}
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        Vote Yes
+                        Execute Proposal
                       </button>
-                      <button
-                        onClick={() => vote(proposal.id, 'no')}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-1"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Vote No
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}
+            {clubProposals.length === 0 && (
+              <p className="text-gray-500 text-center py-8">No proposals yet. Create the first one!</p>
+            )}
           </div>
         </div>
 
@@ -915,19 +1394,36 @@ const InvestmentClubDAO = () => {
             </nav>
 
             <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-500">Polygon Testnet</div>
+              <div className="text-sm text-gray-500">
+                {networkId === 80001 ? 'Mumbai Testnet' : 
+                 networkId === 137 ? 'Polygon Mainnet' : 
+                 'Polygon Testnet'}
+              </div>
               {!userAccount ? (
-                <button
-                  onClick={connectWallet}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Connect Wallet
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={connectWallet}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                    disabled={loading}
+                  >
+                    <Wallet className="w-4 h-4" />
+                    {loading ? 'Connecting...' : 'Connect Wallet'}
+                  </button>
+                  <button
+                    onClick={connectTestWallet}
+                    className="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 text-sm"
+                    disabled={loading}
+                  >
+                    Test Mode
+                  </button>
+                </div>
               ) : (
                 <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-lg">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   <span className="text-sm font-medium">{userAccount.slice(0, 6)}...{userAccount.slice(-4)}</span>
+                  {userAccount === "0xd67582D5C2c543F0a3FD8DF069bf308932cD86Ca" && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Test Mode</span>
+                  )}
                 </div>
               )}
             </div>
